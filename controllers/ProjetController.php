@@ -234,8 +234,47 @@ class ProjetController extends BaseController {
     }
     
     /**
-     * Changer le statut d'un projet
+     * Marquer un projet comme terminé
      */
+    public function complete() {
+        if (!isset($_GET['id'])) {
+            $this->setFlashMessage('ID du projet manquant', 'error');
+            $this->redirect('index.php?page=projets');
+        }
+
+        $id = (int)$_GET['id'];
+        
+        // Vérifier si le projet existe
+        if (!$this->projetModel->exists($id)) {
+            $this->setFlashMessage('Projet non trouvé.', 'error');
+            $this->redirect('index.php?page=projets');
+        }
+        
+        // Vérifier les permissions (admin ou chef de projet)
+        $isChef = $this->equipeModel->getProjectManager($id);
+        if (!$this->isAdmin() && (!$isChef || $isChef['id'] != $this->user['id'])) {
+            $this->setFlashMessage('Accès refusé. Seuls les administrateurs et chefs de projet peuvent terminer ce projet.', 'error');
+            $this->redirect('index.php?page=projets&action=view&id=' . $id);
+        }
+        
+        try {
+            // Mettre à jour le statut et la date de fin réelle
+            $success = $this->projetModel->update($id, [
+                'statut' => 'terminé',
+                'date_fin_reelle' => date('Y-m-d')
+            ]);
+            
+            if ($success) {
+                $this->setFlashMessage('Projet marqué comme terminé avec succès', 'success');
+            } else {
+                $this->setFlashMessage('Erreur lors de la mise à jour du projet', 'error');
+            }
+        } catch (Exception $e) {
+            $this->setFlashMessage('Erreur: ' . $e->getMessage(), 'error');
+        }
+        
+        $this->redirect('index.php?page=projets');
+    }
     
     /**
      * Gérer l'équipe d'un projet
@@ -310,27 +349,10 @@ class ProjetController extends BaseController {
         
         $this->redirect('index.php?page=projets&action=team&id=' . $projetId);
     }
-
-     public function complete()
-{
-    if (!isset($_GET['id'])) {
-        $_SESSION['error'] = "ID du projet manquant";
-        header('Location: index.php?page=projets');
-        exit;
-    }
-
-    $id = (int)$_GET['id'];
     
-    try {
-        // Use the existing updateStatus method instead
-        $this->updateStatus();
-    } catch (Exception $e) {
-        $_SESSION['error'] = "Erreur: " . $e->getMessage();
-    }
-    
-    header('Location: index.php?page=projets');
-    exit;
-}
+    /**
+     * Changer le statut d'un projet
+     */
     public function updateStatus() {
         $id = $_GET['id'] ?? null;
         $status = $_GET['status'] ?? null;
@@ -354,7 +376,14 @@ class ProjetController extends BaseController {
         }
         
         try {
-            $this->projetModel->updateStatus($id, $status);
+            $updateData = ['statut' => $status];
+            
+            // Si on termine le projet, ajouter la date de fin réelle
+            if ($status === 'terminé') {
+                $updateData['date_fin_reelle'] = date('Y-m-d');
+            }
+            
+            $this->projetModel->update($id, $updateData);
             $this->setFlashMessage('Statut du projet mis à jour.', 'success');
         } catch (Exception $e) {
             $this->setFlashMessage('Erreur lors de la mise à jour du statut.', 'error');

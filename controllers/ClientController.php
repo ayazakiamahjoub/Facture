@@ -171,31 +171,66 @@ class ClientController extends BaseController {
     /**
      * Supprimer un client (désactivation)
      */
+    // public function delete() {
+    //     $id = $_GET['id'] ?? null;
+        
+    //     if (!$id || !$this->clientModel->exists($id)) {
+    //         $this->setFlashMessage('Client non trouvé.', 'error');
+    //         $this->redirect('index.php?page=clients');
+    //     }
+        
+    //     // Vérifier s'il y a des projets actifs
+    //     $activeProjects = $this->clientModel->countActiveProjects($id);
+    //     if ($activeProjects > 0) {
+    //         $this->setFlashMessage('Impossible de supprimer ce client car il a des projets actifs.', 'error');
+    //         $this->redirect('index.php?page=clients&action=view&id=' . $id);
+    //     }
+        
+    //     try {
+    //         $this->clientModel->deactivate($id);
+    //         $this->setFlashMessage('Client désactivé avec succès.', 'success');
+    //     } catch (Exception $e) {
+    //         $this->setFlashMessage('Erreur lors de la suppression du client.', 'error');
+    //     }
+        
+    //     $this->redirect('index.php?page=clients');
+    // }
+    
+
     public function delete() {
-        $id = $_GET['id'] ?? null;
-        
-        if (!$id || !$this->clientModel->exists($id)) {
-            $this->setFlashMessage('Client non trouvé.', 'error');
-            $this->redirect('index.php?page=clients');
-        }
-        
-        // Vérifier s'il y a des projets actifs
-        $activeProjects = $this->clientModel->countActiveProjects($id);
-        if ($activeProjects > 0) {
-            $this->setFlashMessage('Impossible de supprimer ce client car il a des projets actifs.', 'error');
-            $this->redirect('index.php?page=clients&action=view&id=' . $id);
-        }
-        
-        try {
-            $this->clientModel->deactivate($id);
-            $this->setFlashMessage('Client désactivé avec succès.', 'success');
-        } catch (Exception $e) {
-            $this->setFlashMessage('Erreur lors de la suppression du client.', 'error');
-        }
-        
+    $id = $_GET['id'] ?? null;
+    
+    if (!$id || !$this->clientModel->exists($id)) {
+        $this->setFlashMessage('Client non trouvé.', 'error');
         $this->redirect('index.php?page=clients');
     }
-    
+
+    // Vérifier projets actifs
+    $activeProjects = $this->clientModel->countActiveProjects($id);
+    if ($activeProjects > 0) {
+        $this->setFlashMessage('Impossible de supprimer ce client car il a des projets actifs.', 'error');
+        $this->redirect('index.php?page=clients&action=view&id=' . $id);
+    }
+
+    try {
+        // 1) Supprimer ses factures
+        $factureModel = new Facture();
+        $factures = $factureModel->getByClient($id);
+        foreach ($factures as $facture) {
+            $factureModel->delete($facture['id_facture']);
+        }
+
+        // 2) Supprimer le client
+        $this->clientModel->delete($id);
+
+        $this->setFlashMessage('Client et ses factures supprimés avec succès.', 'success');
+    } catch (Exception $e) {
+        $this->setFlashMessage('Erreur lors de la suppression du client.', 'error');
+    }
+
+    $this->redirect('index.php?page=clients');
+}
+
     /**
      * Réactiver un client
      */
